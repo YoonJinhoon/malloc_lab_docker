@@ -64,6 +64,7 @@ team_t team = {
 #define PREV_BLKP(bp)   ( (char *)(bp) - GET_SIZE( ( (char *)(bp) - DSIZE ) ) )
 
 static char *heap_listp = 0;
+static char *last_bp;
 
 static void *extend_heap(size_t words);
 static void *coalesce(void *bp);
@@ -79,7 +80,9 @@ int mm_init(void)
     PUT(heap_listp + (3 * WSIZE), PACK(0, 1));
 
     heap_listp += (2 * WSIZE);
+    last_bp = heap_listp;
 
+    last_bp = heap_listp;
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
         return -1;
 
@@ -100,7 +103,9 @@ static void*extend_heap(size_t words)
     PUT(FTRP(bp), PACK(size, 0));
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
 
-    return coalesce(bp);
+    bp = coalesce(bp);
+    last_bp = bp;
+    return bp;
 }
 
 static void *coalesce(void *bp)
@@ -134,6 +139,7 @@ static void *coalesce(void *bp)
         bp = PREV_BLKP(bp);
     }
 
+    last_bp = bp;
     return bp;
 }
 
@@ -176,9 +182,16 @@ static void *find_fit(size_t asize)
 {
     void *bp;
 
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-
+    for (bp = last_bp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
         if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+            last_bp = bp;
+            return bp;
+        }
+    }
+
+    for (bp = heap_listp; bp < last_bp; bp = NEXT_BLKP(bp)) {
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+            last_bp = bp;
             return bp;
         }
     }
@@ -204,6 +217,8 @@ static void place(void *bp, size_t asize)
         PUT(HDRP(bp), PACK(csize, 1));
         PUT(FTRP(bp), PACK(csize, 1));
     }
+
+    last_bp = bp;
 }
 
 /*
